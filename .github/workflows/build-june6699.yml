@@ -1,0 +1,102 @@
+name: Build Simple Live June 1.13.2
+
+on:
+  push:
+    branches: [june6699-build]
+    paths: [.github/workflows/build-june6699.yml]
+
+permissions:
+  contents: read
+
+env:
+  JUNE_SOURCE: 53371e1cbaf78b6eb62feeded68670fc99a577d2
+
+jobs:
+  windows:
+    name: Windows x64 portable
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: June6699/dart_simple_live
+          ref: ${{ env.JUNE_SOURCE }}
+          persist-credentials: false
+
+      - name: Apply June6699 Windows build compatibility fixes
+        shell: pwsh
+        run: |
+          git fetch --no-tags --depth=1 origin d77dfcc9c6a1235ee8ab9e361d602fa019bd3f2b
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git restore --source=FETCH_HEAD -- simple_live_app/windows/CMakeLists.txt third_party/media_kit_libs_windows_video/windows/CMakeLists.txt
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: simple_live_app/.fvmrc
+
+      - name: Build portable Windows app
+        working-directory: simple_live_app
+        run: flutter build windows --release
+
+      - name: Verify portable bundle
+        shell: pwsh
+        run: |
+          $bundle = 'simple_live_app/build/windows/x64/runner/Release'
+          foreach ($required in @('simple_live_app.exe', 'flutter_windows.dll', 'data/flutter_assets')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $bundle $required))) {
+              throw "Missing Windows bundle file: $required"
+            }
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SimpleLive-June-1.13.2-Windows-x64
+          path: simple_live_app/build/windows/x64/runner/Release/
+          if-no-files-found: error
+
+  android:
+    name: Android universal APK
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: June6699/dart_simple_live
+          ref: ${{ env.JUNE_SOURCE }}
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: simple_live_app/.fvmrc
+
+      - name: Give the test app a separate Android identity
+        working-directory: simple_live_app
+        shell: bash
+        run: |
+          gradle_file=android/app/build.gradle.kts
+          manifest=android/app/src/main/AndroidManifest.xml
+          grep -F 'applicationId = "com.xycz.simple_live"' "$gradle_file"
+          grep -F 'android:label="Simple Live"' "$manifest"
+          sed -i 's/applicationId = "com\.xycz\.simple_live"/applicationId = "com.xycz.simple_live.elevenmtb"/' "$gradle_file"
+          sed -i 's/android:label="Simple Live"/android:label="Simple Live June"/' "$manifest"
+
+      - name: Build and verify Android APK
+        working-directory: simple_live_app
+        shell: bash
+        run: |
+          flutter build apk --release
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          "$build_tools/apksigner" verify "$apk"
+          "$build_tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/simple-live-june-badging.txt"
+          grep -F "package: name='com.xycz.simple_live.elevenmtb'" "$RUNNER_TEMP/simple-live-june-badging.txt"
+          cp "$apk" "$RUNNER_TEMP/SimpleLive-June-1.13.2-Android.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SimpleLive-June-1.13.2-Android
+          path: ${{ runner.temp }}/SimpleLive-June-1.13.2-Android.apk
+          if-no-files-found: error
