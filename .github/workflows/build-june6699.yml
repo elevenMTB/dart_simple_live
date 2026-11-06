@@ -29,6 +29,21 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git restore --source=FETCH_HEAD -- simple_live_app/windows/CMakeLists.txt third_party/media_kit_libs_windows_video/windows/CMakeLists.txt
 
+      - name: Use a separate Windows profile
+        shell: pwsh
+        run: |
+          $resourceFile = 'simple_live_app/windows/runner/Runner.rc'
+          $resources = Get-Content -LiteralPath $resourceFile -Raw
+          $isolatedResources = $resources.Replace('"ProductName", "simple_live_app"', '"ProductName", "simple_live_june"')
+          if ($isolatedResources -eq $resources) { throw 'Windows profile identifier was not found.' }
+          Set-Content -LiteralPath $resourceFile -Value $isolatedResources -NoNewline
+
+          $runnerFile = 'simple_live_app/windows/runner/main.cpp'
+          $runner = Get-Content -LiteralPath $runnerFile -Raw
+          $isolatedRunner = $runner.Replace('simple_live_app\\gpu_preference.txt', 'simple_live_june\\gpu_preference.txt')
+          if ($isolatedRunner -eq $runner) { throw 'Windows GPU preference path was not found.' }
+          Set-Content -LiteralPath $runnerFile -Value $isolatedRunner -NoNewline
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version-file: simple_live_app/.fvmrc
@@ -41,15 +56,51 @@ jobs:
         shell: pwsh
         run: |
           $bundle = 'simple_live_app/build/windows/x64/runner/Release'
-          foreach ($required in @('simple_live_app.exe', 'flutter_windows.dll', 'data/flutter_assets')) {
+          $quickJs = Join-Path $bundle 'dart_quickjs.dll'
+          if (-not (Test-Path -LiteralPath $quickJs)) {
+            $nativeAsset = 'simple_live_app/build/native_assets/windows/dart_quickjs.dll'
+            if (-not (Test-Path -LiteralPath $nativeAsset)) {
+              $hookDir = 'simple_live_app/.dart_tool/hooks_runner/dart_quickjs'
+              $candidates = @(Get-ChildItem -LiteralPath $hookDir -Filter 'dart_quickjs.dll' -File -Recurse)
+              if ($candidates.Count -ne 1) { throw 'Could not identify the built QuickJS library.' }
+              $nativeAsset = $candidates[0].FullName
+            }
+            Copy-Item -LiteralPath $nativeAsset -Destination $quickJs
+          }
+          foreach ($required in @('simple_live_app.exe', 'flutter_windows.dll', 'libmpv-2.dll', 'dart_quickjs.dll', 'data/flutter_assets')) {
             if (-not (Test-Path -LiteralPath (Join-Path $bundle $required))) {
               throw "Missing Windows bundle file: $required"
             }
           }
 
+      - name: Confirm the Windows app opens a window
+        shell: pwsh
+        run: |
+          $bundle = (Resolve-Path -LiteralPath 'simple_live_app/build/windows/x64/runner/Release').Path
+          $exe = Join-Path $bundle 'simple_live_app.exe'
+          if ((Get-Item -LiteralPath $exe).VersionInfo.ProductName -ne 'simple_live_june') {
+            throw 'The executable is not using the separate Windows profile.'
+          }
+          $app = Start-Process -FilePath $exe -WorkingDirectory $bundle -WindowStyle Normal -PassThru
+          try {
+            for ($attempt = 0; $attempt -lt 45; $attempt++) {
+              Start-Sleep -Seconds 1
+              $app.Refresh()
+              if ($app.HasExited) { throw "The app exited before displaying a window ($($app.ExitCode))." }
+              if ($app.MainWindowHandle -ne 0) { break }
+            }
+            if ($app.MainWindowHandle -eq 0) { throw 'The app did not display a window.' }
+            Write-Host "Opened window: $($app.MainWindowTitle)"
+          } finally {
+            if (-not $app.HasExited) {
+              $null = $app.CloseMainWindow()
+              if (-not $app.WaitForExit(5000)) { Stop-Process -Id $app.Id }
+            }
+          }
+
       - uses: actions/upload-artifact@v4
         with:
-          name: SimpleLive-June-1.13.2-Windows-x64
+          name: SimpleLive-June-1.13.2-Windows-x64-startup-fixed
           path: simple_live_app/build/windows/x64/runner/Release/
           if-no-files-found: error
 
