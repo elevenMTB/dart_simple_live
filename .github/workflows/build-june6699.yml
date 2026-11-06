@@ -83,6 +83,13 @@ jobs:
           sed -i 's/applicationId = "com\.xycz\.simple_live"/applicationId = "com.xycz.simple_live.elevenmtb"/' "$gradle_file"
           sed -i 's/android:label="Simple Live"/android:label="Simple Live June"/' "$manifest"
 
+      - name: Pin Android theme plugin to the Gradle-compatible version
+        working-directory: simple_live_app
+        shell: bash
+        run: |
+          grep -F 'dynamic_color: ^1.8.1' pubspec.yaml
+          sed -i 's/dynamic_color: \^1\.8\.1/dynamic_color: 1.8.1/' pubspec.yaml
+
       - name: Build and verify Android APK
         working-directory: simple_live_app
         shell: bash
