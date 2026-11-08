@@ -91,13 +91,14 @@ class FollowUserController extends BasePageController<FollowUser> {
 
   Future<void> _loadInitialData() async {
     await refreshData(forceStatus: false);
-    if (AppSettingsController.instance.followRefreshOnEnter.value &&
+    await refreshOnEnter();
+  }
+
+  Future<void> refreshOnEnter() async {
+    if (!isClosed &&
+        AppSettingsController.instance.followRefreshOnEnter.value &&
         FollowService.instance.followList.isNotEmpty) {
-      unawaited(
-        FollowService.instance.startUpdateStatus(force: false).then((_) {
-          filterData();
-        }),
-      );
+      await FollowService.instance.startUpdateStatus();
     }
   }
 

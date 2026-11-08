@@ -590,50 +590,10 @@ Widget _buildFullBottomBar(
             ),
             const Expanded(child: SizedBox()),
             if (!Platform.isAndroid && !Platform.isIOS)
-              IconButton(
-                key: volumeButtonKey,
-                onPressed: () {
-                  final context = volumeButtonKey.currentContext;
-                  if (context == null) {
-                    return;
-                  }
-                  controller.showVolumeSlider(
-                    context,
-                    keepAlive: true,
-                  );
-                },
-                icon: Icon(
-                  controller.mutedState.value
-                      ? Icons.volume_off
-                      : Icons.volume_down,
-                  size: 24,
-                  color: Colors.white,
-                ),
-              ),
-            IconButton(
-              onPressed: controller.toggleMute,
-              icon: Icon(
-                controller.mutedState.value
-                    ? Icons.volume_off
-                    : Icons.volume_up,
-                size: 24,
-                color: Colors.white,
-              ),
-            ),
-            TextButton(
-              onPressed: () => showQualitesInfo(controller),
-              child: Text(
-                controller.currentQualityInfo.value,
-                style: const TextStyle(color: Colors.white, fontSize: 15),
-              ),
-            ),
-            TextButton(
-              onPressed: () => showLinesInfo(controller),
-              child: Text(
-                controller.currentLineInfo.value,
-                style: const TextStyle(color: Colors.white, fontSize: 15),
-              ),
-            ),
+              _buildVolumeAdjustButton(controller, volumeButtonKey),
+            _buildMuteButton(controller),
+            _buildQualityMenuButton(controller),
+            _buildLineMenuButton(controller),
             if (!Platform.isAndroid && !Platform.isIOS)
               IconButton(
                 onPressed: controller.enterSmallWindow,
@@ -796,52 +756,10 @@ Widget _buildNormalBottomBar(
             ),
             const Expanded(child: SizedBox()),
             if (!Platform.isAndroid && !Platform.isIOS)
-              IconButton(
-                key: volumeButtonKey,
-                onPressed: () {
-                  final context = volumeButtonKey.currentContext;
-                  if (context == null) {
-                    return;
-                  }
-                  controller.showVolumeSlider(
-                    context,
-                    keepAlive: true,
-                  );
-                },
-                icon: Icon(
-                  controller.mutedState.value
-                      ? Icons.volume_off
-                      : Icons.volume_down,
-                  size: 24,
-                  color: Colors.white,
-                ),
-              ),
-            IconButton(
-              onPressed: controller.toggleMute,
-              icon: Icon(
-                controller.mutedState.value
-                    ? Icons.volume_off
-                    : Icons.volume_up,
-                size: 24,
-                color: Colors.white,
-              ),
-            ),
-            if (!isPortrait)
-              TextButton(
-                onPressed: () => showQualitesInfo(controller),
-                child: Text(
-                  controller.currentQualityInfo.value,
-                  style: const TextStyle(color: Colors.white, fontSize: 15),
-                ),
-              ),
-            if (!isPortrait)
-              TextButton(
-                onPressed: () => showLinesInfo(controller),
-                child: Text(
-                  controller.currentLineInfo.value,
-                  style: const TextStyle(color: Colors.white, fontSize: 15),
-                ),
-              ),
+              _buildVolumeAdjustButton(controller, volumeButtonKey),
+            _buildMuteButton(controller),
+            if (!isPortrait) _buildQualityMenuButton(controller),
+            if (!isPortrait) _buildLineMenuButton(controller),
             if (!Platform.isAndroid && !Platform.isIOS)
               IconButton(
                 onPressed: controller.enterSmallWindow,
@@ -981,6 +899,144 @@ Widget buildDanmuView(VideoState videoState, LiveRoomController controller) {
   );
 }
 
+Widget _buildVolumeAdjustButton(
+  LiveRoomController controller,
+  GlobalKey key,
+) {
+  return IconButton(
+    key: key,
+    tooltip: "调节音量",
+    onPressed: () {
+      final context = key.currentContext;
+      if (context != null) {
+        controller.showVolumeSlider(context, keepAlive: true);
+      }
+    },
+    icon: const Icon(Icons.tune, size: 24, color: Colors.white),
+  );
+}
+
+Widget _buildMuteButton(LiveRoomController controller) {
+  final muted = controller.mutedState.value;
+  return IconButton(
+    tooltip: muted ? "取消静音" : "静音",
+    onPressed: controller.toggleMute,
+    icon: Icon(
+      muted ? Icons.volume_off : Icons.volume_up,
+      size: 24,
+      color: Colors.white,
+    ),
+  );
+}
+
+Widget _buildQualityMenuButton(LiveRoomController controller) {
+  final qualities = controller.qualites.toList(growable: false);
+  return _buildPlaybackMenuButton(
+    controller,
+    title: "清晰度",
+    label: controller.currentQualityInfo.value,
+    choices: qualities.map((quality) => quality.quality).toList(),
+    currentIndex: controller.currentQuality,
+    onSelected: (index) {
+      if (index < controller.qualites.length &&
+          identical(controller.qualites[index], qualities[index])) {
+        controller.changePlayQuality(index);
+      }
+    },
+    openOriginalMenu: () => showQualitesInfo(controller),
+  );
+}
+
+Widget _buildLineMenuButton(LiveRoomController controller) {
+  final urls = controller.playUrls.toList(growable: false);
+  return _buildPlaybackMenuButton(
+    controller,
+    title: "线路选择",
+    label: controller.currentLineInfo.value,
+    choices: [
+      for (var i = 0; i < urls.length; i++)
+        "线路${i + 1}  ${urls[i].contains('.flv') ? 'FLV' : 'HLS'}",
+    ],
+    currentIndex: controller.currentLineIndex,
+    onSelected: (index) {
+      if (index < controller.playUrls.length &&
+          controller.playUrls[index] == urls[index]) {
+        controller.changePlayLine(index);
+      }
+    },
+    openOriginalMenu: () => showLinesInfo(controller),
+  );
+}
+
+Widget _buildPlaybackMenuButton(
+  LiveRoomController controller, {
+  required String title,
+  required String label,
+  required List<String> choices,
+  required int currentIndex,
+  required ValueChanged<int> onSelected,
+  required VoidCallback openOriginalMenu,
+}) {
+  final text = Text(
+    label,
+    style: const TextStyle(color: Colors.white, fontSize: 15),
+  );
+  if (!Platform.isWindows) {
+    return TextButton(onPressed: openOriginalMenu, child: text);
+  }
+
+  return Builder(
+    builder: (context) => TextButton(
+      onPressed: choices.isEmpty
+          ? null
+          : () async {
+              final button = context.findRenderObject() as RenderBox;
+              final overlay = Navigator.of(context)
+                  .overlay!
+                  .context
+                  .findRenderObject() as RenderBox;
+              final anchor = button.localToGlobal(Offset.zero, ancestor: overlay);
+              controller.playbackMenuVisible = true;
+              controller.hideControlsTimer?.cancel();
+              try {
+                final selected = await showMenu<int>(
+                  context: context,
+                  semanticLabel: title,
+                  position: RelativeRect.fromSize(
+                    anchor & button.size,
+                    overlay.size,
+                  ),
+                  initialValue: currentIndex,
+                  constraints: const BoxConstraints(
+                    minWidth: 128,
+                    maxWidth: 240,
+                    maxHeight: 280,
+                  ),
+                  items: [
+                    for (var i = 0; i < choices.length; i++)
+                      CheckedPopupMenuItem<int>(
+                        value: i,
+                        checked: i == currentIndex,
+                        height: 36,
+                        child: Text(choices[i], overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                );
+                if (selected != null && !controller.isPlayerClosing) {
+                  onSelected(selected);
+                }
+              } finally {
+                controller.playbackMenuVisible = false;
+                if (!controller.isPlayerClosing && controller.showControlsState.value) {
+                  controller.resetHideControlsTimer();
+                }
+              }
+            },
+      child: text,
+    ),
+  );
+}
+
 void showLinesInfo(LiveRoomController controller) {
   if (controller.useBottomSheetPlayerMenus) {
     controller.showPlayUrlsSheet();
@@ -1055,16 +1111,7 @@ void showQualitesInfo(LiveRoomController controller) {
           minLeadingWidth: 16,
           onTap: () {
             Utils.hideRightDialog();
-            controller.currentQuality = i;
-            // 保存清晰度记忆。
-            if (i >= 0 && i < controller.qualites.length) {
-              AppSettingsController.instance.saveQualityMemory(
-                siteId: controller.site.id,
-                qualityName: controller.qualites[i].quality,
-                offsetFromTop: i,
-              );
-            }
-            controller.getPlayUrl();
+            controller.changePlayQuality(i);
           },
         );
       },

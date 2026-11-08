@@ -2858,8 +2858,6 @@ class LiveRoomController extends PlayerController
     _cancelVolumeSliderDismiss();
     hidevolumeTimer = Timer(delay, () {
       hidevolumeTimer = null;
-      _volumeSliderPointerEntered = false;
-      volumeSliderVisible = false;
       SmartDialog.dismiss(tag: volumeSliderDialogTag);
     });
   }
@@ -2884,11 +2882,20 @@ class LiveRoomController extends PlayerController
       alignment: Alignment.topCenter,
       displayTime: null,
       maskColor: const Color(0x00000000),
-      clickMaskDismiss: false,
-      usePenetrate: true,
+      clickMaskDismiss: true,
+      usePenetrate: false,
       useAnimation: false,
       tag: volumeSliderDialogTag,
       keepSingle: true,
+      onDismiss: () {
+        final wasVisible = volumeSliderVisible;
+        _cancelVolumeSliderDismiss();
+        _volumeSliderPointerEntered = false;
+        volumeSliderVisible = false;
+        if (wasVisible && !isPlayerClosing && showControlsState.value) {
+          resetHideControlsTimer();
+        }
+      },
       builder: (context) {
         return MouseRegion(
           onEnter: (_) {
@@ -2929,6 +2936,19 @@ class LiveRoomController extends PlayerController
     _scheduleVolumeSliderDismiss(const Duration(milliseconds: 600));
   }
 
+  void changePlayQuality(int index) {
+    if (index < 0 || index >= qualites.length || isPlayerClosing) {
+      return;
+    }
+    currentQuality = index;
+    AppSettingsController.instance.saveQualityMemory(
+      siteId: site.id,
+      qualityName: qualites[index].quality,
+      offsetFromTop: index,
+    );
+    unawaited(getPlayUrl());
+  }
+
   void showQualitySheet() {
     Utils.showBottomSheet(
       title: "切换清晰度",
@@ -2936,16 +2956,7 @@ class LiveRoomController extends PlayerController
         groupValue: currentQuality,
         onChanged: (e) {
           Get.back();
-          currentQuality = e ?? 0;
-          // 保存清晰度记忆。
-          if (currentQuality >= 0 && currentQuality < qualites.length) {
-            AppSettingsController.instance.saveQualityMemory(
-              siteId: site.id,
-              qualityName: qualites[currentQuality].quality,
-              offsetFromTop: currentQuality,
-            );
-          }
-          getPlayUrl();
+          changePlayQuality(e ?? 0);
         },
         child: ListView.builder(
           itemCount: qualites.length,

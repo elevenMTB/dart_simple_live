@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import 'package:get/get.dart';
@@ -47,11 +49,11 @@ class IndexedController extends GetxController {
           break;
         default:
       }
-    } else {
-      if (index.value == i) {
-        EventBus.instance
-            .emit<int>(EventBus.kBottomNavigationBarClicked, items[i].index);
-      }
+    } else if (index.value == i) {
+      EventBus.instance
+          .emit<int>(EventBus.kBottomNavigationBarClicked, items[i].index);
+    } else if (items[i].index == 1) {
+      unawaited(Get.find<FollowUserController>().refreshOnEnter());
     }
 
     index.value = i;

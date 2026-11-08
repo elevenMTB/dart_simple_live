@@ -267,6 +267,9 @@ mixin PlayerStateMixin on PlayerMixin {
 
   /// 音量滑条浮层正在显示，播放器底层鼠标离开时不能隐藏控制器。
   bool volumeSliderVisible = false;
+  bool playbackMenuVisible = false;
+
+  bool get playerPopupVisible => volumeSliderVisible || playbackMenuVisible;
 
   /// 自动隐藏鼠标光标计时器
   Timer? hideMouseCursorTimer;
@@ -1560,7 +1563,7 @@ mixin PlayerGestureControlMixin
     on PlayerStateMixin, PlayerMixin, PlayerSystemMixin {
   /// 单击显示/隐藏控制器
   void onTap() {
-    if (volumeSliderVisible) {
+    if (playerPopupVisible) {
       return;
     }
     if (lockControlsState.value) {
@@ -1590,7 +1593,7 @@ mixin PlayerGestureControlMixin
     hideMouseCursorTimer?.cancel();
     hideControlsTimer?.cancel();
     showLockEdgeState.value = false;
-    if (volumeSliderVisible) {
+    if (playerPopupVisible) {
       return;
     }
     if (lockControlsState.value) {
@@ -1612,7 +1615,7 @@ mixin PlayerGestureControlMixin
   void onHover(PointerHoverEvent event, BuildContext context) {
     showMouseCursor();
     resetHideMouseCursorTimer();
-    if (volumeSliderVisible) {
+    if (playerPopupVisible) {
       return;
     }
     if (lockControlsState.value) {

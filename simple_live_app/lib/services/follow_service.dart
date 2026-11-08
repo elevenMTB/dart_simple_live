@@ -241,15 +241,7 @@ class FollowService extends GetxService {
     if (manual > 0) {
       return manual.clamp(1, count).toInt();
     }
-    var concurrency = 2;
-    if (count <= 50) {
-      concurrency = count < 2 ? count : 2;
-    } else if (count <= 200) {
-      concurrency = 3;
-    } else {
-      concurrency = 4;
-    }
-    return concurrency.clamp(1, count).toInt();
+    return count.clamp(1, 4).toInt();
   }
 
   String _getConcurrencyMode() {
@@ -905,8 +897,9 @@ class FollowService extends GetxService {
         }
         final queue = Queue<FollowUser>.from(group);
         final isDouyinQueue = group.first.siteId == Constant.kDouyin;
-        final workerCount =
-            isDouyinQueue ? 1 : group.length.clamp(1, 2).toInt();
+        final workerCount = isDouyinQueue
+            ? 1
+            : getOptimalConcurrency(totalCount: group.length);
         final workers = <Future<void>>[];
         for (var i = 0; i < workerCount; i++) {
           workers.add(worker(queue, isDouyinQueue: isDouyinQueue));
@@ -982,14 +975,15 @@ class FollowService extends GetxService {
     bool force = false,
     required FollowRefreshScope scope,
   }) async {
+    if (!force && updating.value) {
+      return;
+    }
     final now = DateTime.now();
     final lastStartedAt = _lastUpdateStatusStartedAt;
     if (!force &&
         lastStartedAt != null &&
         now.difference(lastStartedAt) < updateStatusCooldown) {
       Log.logPrint("关注状态刷新仍在冷却中，跳过本次自动刷新");
-      updating.value = false;
-      _resetRefreshProgress();
       filterData();
       return;
     }

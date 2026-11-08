@@ -404,7 +404,7 @@ class AppSettingsController extends GetxController {
     );
     followRefreshOnEnter.value = LocalStorageService.instance.getValue(
       LocalStorageService.kFollowRefreshOnEnter,
-      false,
+      true,
     );
     followShowLiveCover.value = LocalStorageService.instance.getValue(
       LocalStorageService.kFollowShowLiveCover,
@@ -2176,7 +2176,7 @@ class AppSettingsController extends GetxController {
   var followSelectedGroupId = "all".obs;
   var followDisplayStyle = "default".obs;
   var followOnlyLive = false.obs;
-  var followRefreshOnEnter = false.obs;
+  var followRefreshOnEnter = true.obs;
   var followShowLiveCover = false.obs;
 
   String _normalizeFollowDisplayStyle(String value) {
